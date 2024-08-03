@@ -1,22 +1,30 @@
-use std::collections::BTreeMap;
+mod error;
+
+use std::path::PathBuf;
+pub use error::Result;
 
 pub struct KvStore {
-    pub map: BTreeMap<String, String>,
+
 }
 
 impl KvStore {
+    pub fn set(&mut self, key: String, value: String) -> Result<()> {
+        todo!()
+    }
+
+    pub fn get(&mut self, key: String) -> Result<Option<String>> {
+        todo!()
+    }
+
+    pub fn remove(&mut self, key: String) -> Result<()> {
+        todo!()
+    }
+
+    pub fn open(path: impl Into<PathBuf>) -> Result<KvStore> {
+        todo!()
+    }
+
     pub fn new() -> Self {
-        Self {
-            map: BTreeMap::new(),
-        }
-    }
-    pub fn set(&mut self, key: String, value: String) {
-        self.map.insert(key, value);
-    }
-    pub fn remove(&mut self, key: String) {
-        self.map.remove(&key);
-    }
-    pub fn get(&self, key: String) -> Option<String> {
-        self.map.get(&key).map(|value| value.clone())
+        todo!()
     }
 }
