@@ -2,6 +2,7 @@ use assert_cmd::prelude::*;
 use kvs::{KvStore, Result};
 use predicates::ord::eq;
 use predicates::str::{contains, is_empty, PredicateStrExt};
+use std::os::unix::fs::FileExt;
 use std::process::Command;
 use tempfile::TempDir;
 use walkdir::WalkDir;
@@ -279,7 +280,7 @@ fn compaction() -> Result<()> {
             let value = format!("{}", iter);
             store.set(key, value)?;
         }
-
+        println!("dir size:  {:?}", store.wal_size());
         let new_size = dir_size();
         if new_size > current_size {
             current_size = new_size;
