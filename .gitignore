@@ -1,2 +1,5 @@
 target/
 log.log
+slog.log
+wal.log
+

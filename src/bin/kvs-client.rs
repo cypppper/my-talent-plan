@@ -1,6 +1,7 @@
+use clap::Arg;
 use clap::{arg, value_parser, Command};
-use kvs::KvStore;
-use kvs::Result;
+use kvs::{KvStore, Result, KvsEngine};
+use std::net::SocketAddr;
 use std::process::exit;
 
 fn main() -> Result<()> {
@@ -16,22 +17,29 @@ fn main() -> Result<()> {
             Command::new("set")
                 .arg(arg!(<KEY>).value_parser(value_parser!(String)))
                 .arg(arg!(<VALUE>).value_parser(value_parser!(String)))
+                .arg(Arg::new("ADDRESS").long("addr").value_parser(value_parser!(SocketAddr)).required(false))
                 .arg(arg!([REDUNDANT]).value_parser(value_parser!(String))),
             Command::new("get")
                 .arg(arg!(<KEY>).value_parser(value_parser!(String)))
+                .arg(Arg::new("ADDRESS").long("addr").value_parser(value_parser!(SocketAddr)).required(false))
                 .arg(arg!([REDUNDANT]).value_parser(value_parser!(String))),
             Command::new("rm")
                 .arg(arg!(<KEY>).value_parser(value_parser!(String)))
+                .arg(Arg::new("ADDRESS").long("addr").value_parser(value_parser!(SocketAddr)).required(false))
                 .arg(arg!([REDUNDANT]).value_parser(value_parser!(String))),
         ])
         .get_matches();
     let mut kvs = KvStore::new()?;
+    let mut server_ip_port: SocketAddr = "127.0.0.1:4000".parse().unwrap();
     match matches.subcommand() {
         Some(("set", set_cmd)) => {
             let key = set_cmd.get_one::<String>("KEY").unwrap();
             let value = set_cmd.get_one::<String>("VALUE").unwrap();
+            if let Some(cmd_ip_port) = set_cmd.get_one::<SocketAddr>("ADDRESS") {
+                server_ip_port = cmd_ip_port.to_owned();
+            }
             let redundant = set_cmd.get_one::<String>("REDUNDANT");
-            assert!(redundant.is_none());
+            assert!(redundant.is_none(), "has redundant argument!");
             // println!("set was used with key:{:?}, value:{:?}", key, value,);
             if let Err(err) = kvs.set(key.to_owned(), value.to_owned()) {
                 println!("{:?}", err);
@@ -42,8 +50,11 @@ fn main() -> Result<()> {
         }
         Some(("get", get_cmd)) => {
             let key = get_cmd.get_one::<String>("KEY").unwrap();
+            if let Some(cmd_ip_port) = get_cmd.get_one::<SocketAddr>("ADDRESS") {
+                server_ip_port = cmd_ip_port.to_owned();
+            }
             let redundant = get_cmd.get_one::<String>("REDUNDANT");
-            assert!(redundant.is_none());
+            assert!(redundant.is_none(), "has redundant argument!");
             // println!("get was used with key:{:?}", key,);
             if let Ok(Some(value)) = kvs.get(key.to_owned()) {
                 println!("{}", value);
@@ -55,8 +66,11 @@ fn main() -> Result<()> {
         }
         Some(("rm", rm_cmd)) => {
             let key = rm_cmd.get_one::<String>("KEY").unwrap();
+            if let Some(cmd_ip_port) = rm_cmd.get_one::<SocketAddr>("ADDRESS") {
+                server_ip_port = cmd_ip_port.to_owned();
+            }
             let redundant = rm_cmd.get_one::<String>("REDUNDANT");
-            assert!(redundant.is_none());
+            assert!(redundant.is_none(), "has redundant argument!");
             // println!("rm was used with key:{:?}", key,);
             if let Ok(_) = kvs.remove(key.to_owned()) {
                 exit(0);
