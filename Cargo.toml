@@ -16,6 +16,7 @@ slog-term = "2.9.1"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.1" 
 log = "0.4.22"
+sled = "1.0.0-alpha.121"
 
 [dev-dependencies]
 assert_cmd = "0.11"
@@ -24,3 +25,7 @@ predicates = "1.0.0"
 rand = "0.6.5"
 tempfile = "3.0.7"
 walkdir = "2.2.7"
+
+[[bench]]
+name = "kvs_benchmark"
+harness = false

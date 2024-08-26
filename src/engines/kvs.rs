@@ -1,37 +1,17 @@
-use serde::{Serialize, Deserialize};
 use core::str;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Read, Write};
+use std::os::unix::fs::MetadataExt;
 use std::{collections::BTreeMap, path::PathBuf};
 use bytes::{Buf, BufMut};
 
+use super::{KVCommand, ENGINE_TAG_FILE};
 use crate::wal::WAL;
 use crate::error::Result;
 use super::KvsEngine;
 
 const TAG: &str = "kvss";
-const ENGINE_TAG_FILE: &str = "engine.tag";
 
-#[derive(Serialize, Deserialize, Debug)]
-enum KVCommand {
-    Set(String, String),
-    Remove(String),
-}
-
-impl KVCommand {
-    pub fn deserialized_get_key(bytes: &[u8]) -> Option<String> {
-        let deserialized_content = serde_json::from_slice::<KVCommand>(bytes).unwrap();
-                
-        match &deserialized_content {
-            KVCommand::Set(key, _) => {
-                Some(key.to_owned())
-            },
-            KVCommand::Remove(_) => {
-                None
-            },
-        }
-    }
-}
 
 pub struct KvStore {
     wal: WAL,
@@ -53,28 +33,34 @@ impl KvStore {
         Ok(ret)
     }
 
-    fn set_config(&self) {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(std::env::current_dir().unwrap().join(ENGINE_TAG_FILE))
-            .unwrap();
-        file.write_all(TAG.as_bytes()).unwrap();
-    }
+    // fn set_config(&self) {
+    //     let mut file = OpenOptions::new()
+    //         .create(true)
+    //         .append(true)
+    //         .open(self.work_dir.join(ENGINE_TAG_FILE))
+    //         .unwrap();
+    //     assert!(file.metadata().unwrap().size() == 0, "file path: {}", std::env::current_dir().unwrap().join(ENGINE_TAG_FILE).to_str().unwrap());
+    //     file.write_all(TAG.as_bytes()).unwrap();
+    // }
 
     fn check_config(&self) {
-        if self.map_offset.is_empty() {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(self.work_dir.join(ENGINE_TAG_FILE))
+            .unwrap();
+        if file.metadata().unwrap().size() == 0 {
+            file.write_all(TAG.as_bytes()).unwrap();
             return;
         }
-        let mut file = OpenOptions::new()
-            .create(false)
-            .read(true)
-            .open(std::env::current_dir().unwrap().join(ENGINE_TAG_FILE))
-            .unwrap();
         let mut read_content = Vec::<u8>::new();
         read_content.resize(4, 0);
         let read_len = file.read(&mut read_content[..]).unwrap();
-        assert!(read_len == 4 && str::from_utf8(&read_content[..]).unwrap() == TAG, "last used must be kvs");
+        if !(read_len == 4 && str::from_utf8(&read_content[..]).unwrap() == TAG) {
+            error!("last used must be kvs");
+            std::process::exit(-1);
+        }
     }
 
     fn init_from_wal(&mut self) {
@@ -169,9 +155,6 @@ impl KvStore {
 
 impl KvsEngine for KvStore {
     fn set(&mut self, key: String, value: String) -> Result<()> {
-        if self.map_offset.is_empty() {
-            self.set_config();
-        }
         // write to map
         let offset = self.wal.get_wal_sz() + 4;
         self.map_offset.insert(key.clone(), (None, offset));

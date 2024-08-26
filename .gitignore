@@ -2,4 +2,6 @@ target/
 log.log
 slog.log
 wal.log
-
+stderr
+engine.tag
+wal/

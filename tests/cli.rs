@@ -335,3 +335,45 @@ fn cli_access_server_kvs_engine() {
 fn cli_access_server_sled_engine() {
     cli_access_server("sled", "127.0.0.1:4005");
 }
+
+// use rand::{distributions::Alphanumeric, Rng};
+// use kvs::{KvStore, KvsEngine, SledStore};
+// #[test]
+// fn engine_write_kvs() {
+
+//     fn gen_pairs() -> Vec<(String, String)> {
+//         let mut rng = rand::thread_rng();
+//         let mut ret = vec![];
+//         for _ in 0..100 {
+//             let key_len: usize = rng.gen_range(1, 10_0001);
+//             let key: String = rng
+//                 .sample_iter(&Alphanumeric)
+//                 .take(key_len)
+//                 .map(char::from)
+//                 .collect();
+//             let value_len: usize = rng.gen_range(1, 10_0001);
+//             let value: String = rng
+//                 .sample_iter(&Alphanumeric)
+//                 .take(value_len)
+//                 .map(char::from)
+//                 .collect();
+//             ret.push((key, value));
+//         }
+//         ret
+//     }
+
+//     let temp_dir_kvs = TempDir::new().unwrap();
+//     let mut engine = KvStore::open(temp_dir_kvs.path()).unwrap();
+//     let pairs = gen_pairs();
+
+//     let (key1, value1) = pairs[3].clone();
+//     for (key, value) in pairs {
+//         engine.set(key, value).unwrap();
+//     }
+
+//     assert_eq!(engine.get(key1.clone()).unwrap().unwrap(), value1);
+
+//     println!("search value:{:?}, true value: {}", engine.get(key1).unwrap(), value1)
+
+
+// }
