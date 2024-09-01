@@ -2,6 +2,7 @@ use core::str;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Read, Write};
 use std::os::unix::fs::MetadataExt;
+use std::sync::{Arc, Mutex};
 use std::{collections::BTreeMap, path::PathBuf};
 use bytes::{Buf, BufMut};
 
@@ -12,15 +13,45 @@ use super::KvsEngine;
 
 const TAG: &str = "kvss";
 
-
-pub struct KvStore {
+// : Clone + Send + 'static
+pub struct KvStoreInner {
     wal: WAL,
     map_offset: BTreeMap<String, (Option<usize>, usize)>,
     work_dir: PathBuf,
 }
 
+pub struct KvStore {
+    inner: Arc<Mutex<KvStoreInner>>
+}
+
+
+impl Clone for KvStore {
+    fn clone(&self) -> Self {
+        Self { inner: self.inner.clone() }
+    }
+}
+
+unsafe impl Send for KvStore{}
+
+
 impl KvStore {
-    pub fn open(dir_path: impl Into<PathBuf>) -> Result<KvStore> {
+    pub fn open(dir_path: impl Into<PathBuf>) -> Result<Self> {
+        KvStoreInner::open(dir_path).map(|inn|
+            Self{ inner: Arc::new(Mutex::new(inn)) }
+        )
+    }
+
+    pub fn new() -> Result<Self> {
+        KvStoreInner::new().map(|inn|
+            Self{ inner: Arc::new(Mutex::new(inn)) }
+        )
+    }
+
+
+}
+
+impl KvStoreInner {
+    pub fn open(dir_path: impl Into<PathBuf>) -> Result<Self> {
         let dir_path: PathBuf = dir_path.into();
         let wal = WAL::open(dir_path.clone()).unwrap();
         let mut ret = Self {
@@ -101,11 +132,7 @@ impl KvStore {
         Self::open(std::env::current_dir().unwrap())
     }
 
-    pub fn wal_size(&self) -> usize {
-        self.wal.get_wal_sz()
-    }
-
-    pub fn freeze_wal(&mut self) {
+    fn freeze_wal(&mut self) {
         let write_fn = |writter: &mut BufWriter<File>, buffer: &[u8]| {
             writter.write_all(buffer).unwrap();
             writter.flush().unwrap();
@@ -146,38 +173,44 @@ impl KvStore {
     }
 
     fn check_and_do_freeze(&mut self) {
-        let cur_size = self.wal_size();
+        let cur_size = self.wal.get_wal_sz();
         if cur_size >= 1000_000 {
             self.freeze_wal();
         }
     }
 }
 
+
 impl KvsEngine for KvStore {
-    fn set(&mut self, key: String, value: String) -> Result<()> {
+    fn set(&self, key: String, value: String) -> Result<()> {
+
+        let mut guard = self.inner.lock().unwrap();
+
         // write to map
-        let offset = self.wal.get_wal_sz() + 4;
-        self.map_offset.insert(key.clone(), (None, offset));
+        let offset = guard.wal.get_wal_sz() + 4;
+        guard.map_offset.insert(key.clone(), (None, offset));
         // write to wal
         let cmd = KVCommand::Set(key, value.clone());
         let mut serialized: Vec<u8> = Vec::new();
         let cmd_serialized = serde_json::to_vec(&cmd).unwrap();
         serialized.put_u32(cmd_serialized.len() as u32);
         serialized.extend(cmd_serialized);
-        self.wal.write(&serialized).unwrap();
+        guard.wal.write(&serialized).unwrap();
         
         // check and do compact
-        self.check_and_do_freeze();
+        guard.check_and_do_freeze();
 
         Ok(())
     }
 
-    fn get(&mut self, key: String) -> Result<Option<String>> {
-        if let Some((file_idx, offset)) = self.map_offset.get(&key) {
+    fn get(&self, key: String) -> Result<Option<String>> {
+        let guard = self.inner.lock().unwrap();
+
+        if let Some((file_idx, offset)) = guard.map_offset.get(&key) {
             let set_cmd_bytes_start = *offset;
-            let set_cmd_bytes_len_bytes = self.wal.read_offset(*file_idx, set_cmd_bytes_start - 4, 4).unwrap();
+            let set_cmd_bytes_len_bytes = guard.wal.read_offset(*file_idx, set_cmd_bytes_start - 4, 4).unwrap();
             let set_cmd_bytes_len = (&set_cmd_bytes_len_bytes[..]).get_u32() as usize;
-            let set_cmd_bytes = self.wal.read_offset(*file_idx, set_cmd_bytes_start, set_cmd_bytes_len).unwrap();
+            let set_cmd_bytes = guard.wal.read_offset(*file_idx, set_cmd_bytes_start, set_cmd_bytes_len).unwrap();
             let set_cmd = serde_json::from_slice::<KVCommand>(&set_cmd_bytes[..]).unwrap();
             match set_cmd {
                 KVCommand::Set(_, value) => {
@@ -190,20 +223,28 @@ impl KvsEngine for KvStore {
         }
     }
 
-    fn remove(&mut self, key: String) -> Result<()> {
-        if self.map_offset.contains_key(&key) {
+    fn remove(&self, key: String) -> Result<()> {
+        let mut guard = self.inner.lock().unwrap();
+
+        if guard.map_offset.contains_key(&key) {
             // remove in map
-            self.map_offset.remove(&key);
+            guard.map_offset.remove(&key);
             // write to wal
             let cmd = KVCommand::Remove(key);
             let mut serialized: Vec<u8> = Vec::new();
             let cmd_serialized = serde_json::to_vec(&cmd).unwrap();
             serialized.put_u32(cmd_serialized.len() as u32);
             serialized.extend(cmd_serialized);
-            self.wal.write(&serialized).unwrap();
+            guard.wal.write(&serialized).unwrap();
             Ok(())
         } else {
             Err(format_err!("Key not found").into())
         }
     }
 }
+
+// impl Drop for KvStore {
+//     fn drop(&mut self) {
+//         self.wal.sync().unwrap();
+//     }
+// }

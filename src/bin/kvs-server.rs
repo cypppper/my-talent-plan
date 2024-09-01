@@ -1,5 +1,5 @@
 use clap::{arg, value_parser, Command, Arg};
-use kvs::{init_slog, KvStore, KvsEngine, KvsServer, Result, SledStore};
+use kvs::{init_slog, thread_pool::{SharedQueueThreadPool, ThreadPool}, KvStore, KvsEngine, SledStore, KvsServer, Result};
 use std::net::SocketAddr;
 #[macro_use]
 extern crate log;
@@ -34,15 +34,22 @@ fn main() -> Result<()> {
     eprintln!("[configuration] ip: {}, storage engine: {}", listening_ip_port, engine_name);
 
 
-    let kvengine: Box<dyn KvsEngine> = if engine_name.as_str() == "kvs" {
-        Box::new(KvStore::open(std::env::current_dir().unwrap()).unwrap())
+    if engine_name.as_str() == "kvs" {
+        let kvserver = KvsServer::new(
+            listening_ip_port, 
+            KvStore::open(std::env::current_dir().unwrap()).unwrap(),
+            SharedQueueThreadPool::new(4).unwrap()
+        );
+        kvserver.start();
     } else {
-        Box::new(SledStore::open(std::env::current_dir().unwrap()).unwrap())
-    };
+        let kvserver = KvsServer::new(
+            listening_ip_port, 
+            SledStore::open(std::env::current_dir().unwrap()).unwrap(),
+            SharedQueueThreadPool::new(4).unwrap()
+        );
+        kvserver.start();
+    }
 
-    let mut kvserver = KvsServer::new(listening_ip_port, kvengine);
-
-    kvserver.start();
 
     Ok(())
 }

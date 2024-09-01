@@ -1,18 +1,20 @@
-use std::{default, io::{BufRead, BufReader, Write}, net::{SocketAddr, TcpListener, TcpStream}};
+use std::{default, io::{BufRead, BufReader, Write}, net::{SocketAddr, TcpListener, TcpStream}, sync::{Arc, Mutex}};
 
-use crate::KvsEngine;
+use crate::{thread_pool::{NaiveThreadPool, SharedQueueThreadPool, ThreadPool}, KvStore, KvsEngine};
 
-pub struct KvsServer
+pub struct KvsServer<E: KvsEngine, P: ThreadPool>
 {
-    listener: TcpListener,
-    engine: Box<dyn KvsEngine>,
+    addr: SocketAddr,
+    engine: E,
+    thread_pool: P,
 }
 
-impl KvsServer {
-    pub fn new(addr: SocketAddr, engine: Box<dyn KvsEngine>) -> Self {
+impl<E: KvsEngine, P: ThreadPool> KvsServer<E, P> {
+    pub fn new(addr: SocketAddr, engine: E, pool: P) -> Self {
         Self {
-            listener: TcpListener::bind(addr).unwrap(),
+            addr,
             engine,
+            thread_pool: pool,
         }
     }
 
@@ -39,37 +41,43 @@ impl KvsServer {
         results
     }
 
-    pub fn start(&mut self) {
-        while let Ok((mut stream, _)) = self.listener.accept() {
-            self.handle_cmd(&mut stream);
+    // server start to run
+    pub fn start(&self) {
+        let listener = TcpListener::bind(self.addr).unwrap();
+        for stream in listener.incoming() {
+            let stream = stream.unwrap();
+            let engine = self.engine.clone();
+            self.thread_pool.spawn(|| Self::handle_cmd(engine, stream));
         }
     }
 
-    fn handle_cmd(&mut self, stream: &mut TcpStream) {
+    fn handle_cmd(engine: E, mut stream: TcpStream) {
         let result = Self::parse_cmd(&stream);
+
+        // response
         match result[0].as_str() {
             "SET" => {
                 assert!(result.len() == 3);
-                self.engine.set(result[1].clone(), result[2].clone()).unwrap();
-                Self::write(stream, b"+OK\r\n");
+                engine.set(result[1].clone(), result[2].clone()).unwrap();
+                Self::write(&mut stream, b"+OK\r\n");
             }
             "GET" => {
                 assert!(result.len() == 2);
-                let value = self.engine.get(result[1].clone()).unwrap();
+                let value = engine.get(result[1].clone()).unwrap();
                 if value.is_none() {
-                    Self::write(stream, b"$-1\r\n"); 
+                    Self::write(&mut stream, b"$-1\r\n"); 
                 } else {
                     let value = value.unwrap();
-                    Self::write(stream, format!("${}\r\n{}\r\n", value.len(), value).as_bytes());
+                    Self::write(&mut stream, format!("${}\r\n{}\r\n", value.len(), value).as_bytes());
                 }
             }
             "RM" => {
                 assert!(result.len() == 2);
-                let result = self.engine.remove(result[1].clone());
+                let result = engine.remove(result[1].clone());
                 if result.is_ok() {
-                    Self::write(stream, b"+OK\r\n");
+                    Self::write(&mut stream, b"+OK\r\n");
                 } else {
-                    Self::write(stream, format!("-ERR: {}", result.unwrap_err().to_string()).as_bytes());
+                    Self::write(&mut stream, format!("-ERR: {}", result.unwrap_err().to_string()).as_bytes());
                 }
             }
             default => {

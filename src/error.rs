@@ -3,7 +3,7 @@ use std::io;
 use std::result;
 
 
-#[derive(Debug, Fail)]
+#[derive(Debug)]
 pub enum KvStoreError {
     Io(io::Error),
     Serde(serde_json::Error),

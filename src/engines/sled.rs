@@ -6,8 +6,7 @@ use std::str;
 
 use sled::Db;
 
-use super::{KVCommand, ENGINE_TAG_FILE};
-use crate::wal::WAL;
+use super::{ENGINE_TAG_FILE};
 use crate::error::Result;
 use super::KvsEngine;
 
@@ -18,6 +17,18 @@ pub struct SledStore {
     db: Db,
     work_dir: PathBuf,
 }
+
+impl Clone for SledStore {
+    fn clone(&self) -> Self {
+        Self {
+            db: self.db.clone(),
+            work_dir: self.work_dir.clone(),
+        }
+    }
+}
+
+unsafe impl Send for SledStore {}
+
 
 impl SledStore {
     pub fn open(work_dir: impl AsRef<Path>) -> Result<Self> {
@@ -54,7 +65,7 @@ impl SledStore {
 }
 
 impl KvsEngine for SledStore {
-    fn get(&mut self, key: String) -> Result<Option<String>> {
+    fn get(&self, key: String) -> Result<Option<String>> {
         let value = self.db.get(key.as_bytes()).unwrap();
         if value.is_some() {
             let value = String::from_utf8(value.unwrap().to_vec()).unwrap();
@@ -63,7 +74,7 @@ impl KvsEngine for SledStore {
             Ok(None)
         }
     }
-    fn remove(&mut self, key: String) -> Result<()> {
+    fn remove(&self, key: String) -> Result<()> {
         let result = self.db.remove(key.as_bytes()).unwrap();
         self.db.flush().unwrap();
         if result.is_some() {
@@ -72,7 +83,7 @@ impl KvsEngine for SledStore {
             Err(format_err!("Key not found").into())
         }
     }
-    fn set(&mut self, key: String, value: String) -> Result<()> {
+    fn set(&self, key: String, value: String) -> Result<()> {
         self.db.insert(key.as_bytes(), value.as_bytes()).unwrap();
         self.db.flush().unwrap();
         Ok(())

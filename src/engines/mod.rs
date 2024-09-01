@@ -5,13 +5,14 @@ use crate::error::Result;
 
 pub const ENGINE_TAG_FILE: &str = "engine.tag";
 
-pub trait KvsEngine {
-    fn set(&mut self, key: String, value: String) -> Result<()>;
-    fn get(&mut self, key: String) -> Result<Option<String>>;
-    fn remove(&mut self, key: String) -> Result<()>;
+pub trait KvsEngine: Clone + Send + 'static {
+    fn set(&self, key: String, value: String) -> Result<()>;
+    fn get(&self, key: String) -> Result<Option<String>>;
+    fn remove(&self, key: String) -> Result<()>;
 }
 
 use serde::{Serialize, Deserialize};
+
 #[derive(Serialize, Deserialize, Debug)]
 enum KVCommand {
     Set(String, String),
@@ -33,6 +34,7 @@ impl KVCommand {
     }
 }
 
-pub use kvs::KvStore;
 pub use sled::SledStore;
+pub use kvs::KvStore;
+
 

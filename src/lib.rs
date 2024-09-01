@@ -12,10 +12,11 @@ mod wal;
 mod engines;
 mod cli;
 mod logger;
+pub mod thread_pool;
 
 pub use engines::{KvStore, KvsEngine, SledStore};
 pub use error::Result;
 pub use logger::init_slog;
 pub use cli::{KvsServer, KvsClient};
-
+// pub use thread_pool::{ThreadPool, NaiveThreadPool};
 

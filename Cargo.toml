@@ -16,16 +16,18 @@ slog-term = "2.9.1"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.1" 
 log = "0.4.22"
+crossbeam-channel = "0.5.13"
+rayon = "1.10.0"
+rayon-core = "1.12.1" 
 sled = "1.0.0-alpha.121"
+
 
 [dev-dependencies]
 assert_cmd = "0.11"
-criterion = "0.3"
 predicates = "1.0.0"
 rand = "0.6.5"
 tempfile = "3.0.7"
 walkdir = "2.2.7"
-
-[[bench]]
-name = "kvs_benchmark"
-harness = false
+criterion = "0.2.11"
+crossbeam-utils = "0.6.5"
+panic-control = "0.1.4"
