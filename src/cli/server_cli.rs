@@ -1,4 +1,4 @@
-use std::{default, io::{BufRead, BufReader, Write}, net::{SocketAddr, TcpListener, TcpStream}, sync::{Arc, Mutex}};
+use std::{default, io::{BufRead, BufReader, Write}, net::{SocketAddr, TcpListener, TcpStream}, sync::{Arc, Mutex}, thread::sleep, time::Duration};
 
 use crate::{thread_pool::{NaiveThreadPool, SharedQueueThreadPool, ThreadPool}, KvStore, KvsEngine};
 
@@ -47,13 +47,12 @@ impl<E: KvsEngine, P: ThreadPool> KvsServer<E, P> {
         for stream in listener.incoming() {
             let stream = stream.unwrap();
             let engine = self.engine.clone();
-            self.thread_pool.spawn(|| Self::handle_cmd(engine, stream));
+            self.thread_pool.spawn(|| Self::handle_cmd(engine, stream, vec![]));
         }
     }
 
-    fn handle_cmd(engine: E, mut stream: TcpStream) {
+    fn handle_cmd(engine: E, mut stream: TcpStream, result: Vec<String>) {
         let result = Self::parse_cmd(&stream);
-
         // response
         match result[0].as_str() {
             "SET" => {
@@ -80,6 +79,7 @@ impl<E: KvsEngine, P: ThreadPool> KvsServer<E, P> {
                     Self::write(&mut stream, format!("-ERR: {}", result.unwrap_err().to_string()).as_bytes());
                 }
             }
+            "SHUTDOWN" => {}
             default => {
                 unreachable!()
             }

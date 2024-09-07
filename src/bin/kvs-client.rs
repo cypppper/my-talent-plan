@@ -40,8 +40,8 @@ fn main() -> Result<()> {
             let redundant = set_cmd.get_one::<String>("REDUNDANT");
             assert!(redundant.is_none(), "has redundant argument!");
 
-            let mut kvclient = KvsClient::new(server_ip_port);
-            kvclient.set(key, value);
+            let mut kvclient = KvsClient::new();
+            kvclient.set(key, value, server_ip_port);
 
 
             // println!("set was used with key:{:?}, value:{:?}", key, value,);
@@ -60,8 +60,8 @@ fn main() -> Result<()> {
             let redundant = get_cmd.get_one::<String>("REDUNDANT");
             assert!(redundant.is_none(), "has redundant argument!");
   
-            let mut kvclient = KvsClient::new(server_ip_port);
-            kvclient.get(key);
+            let mut kvclient = KvsClient::new();
+            kvclient.get(key, server_ip_port);
 
             // println!("get was used with key:{:?}", key,);
             // if let Ok(Some(value)) = kvs.get(key.to_owned()) {
@@ -80,8 +80,8 @@ fn main() -> Result<()> {
             let redundant = rm_cmd.get_one::<String>("REDUNDANT");
             assert!(redundant.is_none(), "has redundant argument!");
            
-            let mut kvclient = KvsClient::new(server_ip_port);
-            kvclient.remove(key);
+            let mut kvclient = KvsClient::new();
+            kvclient.remove(key, server_ip_port);
            
             // println!("rm was used with key:{:?}", key,);
             // if let Ok(_) = kvs.remove(key.to_owned()) {

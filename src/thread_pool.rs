@@ -47,15 +47,19 @@ impl Worker {
     pub fn new(id: u32, receiver: Receiver<ThreadPoolMessage>) -> Self {
         let t = thread::spawn(move || {
             loop {
-                let msg = receiver.recv().unwrap();
-                match msg {
-                    ThreadPoolMessage::RunJob(job) => {
-                        info!("do job from worker [{}]", id);
-                        job();
+                match receiver.recv() {
+                    Ok(msg) => {
+                        match msg {
+                            ThreadPoolMessage::RunJob(job) => {
+                                info!("do job from worker [{}]", id);
+                                job();
+                            },
+                            ThreadPoolMessage::Shutdown => {
+                                break;
+                            }
+                        }
                     },
-                    ThreadPoolMessage::Shutdown => {
-                        break;
-                    }
+                    Err(_) => {},
                 }
             }
         });
