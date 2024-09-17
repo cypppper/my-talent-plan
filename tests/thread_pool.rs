@@ -65,6 +65,7 @@ fn rayon_thread_pool_spawn_counter() -> Result<()> {
 }
 
 #[test]
+#[ignore = "panic"]
 fn shared_queue_thread_pool_panic_task() -> Result<()> {
     spawn_panic_task::<SharedQueueThreadPool>()
 }

@@ -1,5 +1,11 @@
 use clap::{arg, value_parser, Command, Arg};
-use kvs::{init_slog, thread_pool::{SharedQueueThreadPool, ThreadPool}, KvStore, KvsEngine, SledStore, KvsServer, Result};
+use kvs::{
+    init_slog, 
+    thread_pool::{SharedQueueThreadPool, ThreadPool}, 
+    KvStore, 
+    SledStore, 
+    KvsServer, 
+    Result};
 use std::net::SocketAddr;
 #[macro_use]
 extern crate log;

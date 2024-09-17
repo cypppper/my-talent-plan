@@ -14,22 +14,18 @@ use super::KvsEngine;
 const TAG: &str = "kvss";
 
 // : Clone + Send + 'static
+#[derive(Clone)]
 pub struct KvStoreInner {
     wal: WAL,
     map_offset: BTreeMap<String, (Option<usize>, usize)>,
     work_dir: PathBuf,
 }
 
+#[derive(Clone)]
 pub struct KvStore {
     inner: Arc<Mutex<KvStoreInner>>
 }
 
-
-impl Clone for KvStore {
-    fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
-    }
-}
 
 unsafe impl Send for KvStore{}
 
@@ -137,7 +133,7 @@ impl KvStoreInner {
             writter.write_all(buffer).unwrap();
             writter.flush().unwrap();
         };
-        let mut imm_wal = self.wal.freeze_file();
+        let mut imm_wal = self.wal.get_freeze_file();
 
         let mut imm_file_size = 0_usize;
         let mut wal_file_offset = 0_usize;
@@ -183,7 +179,6 @@ impl KvStoreInner {
 
 impl KvsEngine for KvStore {
     fn set(&self, key: String, value: String) -> Result<()> {
-
         let mut guard = self.inner.lock().unwrap();
 
         // write to map

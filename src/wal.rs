@@ -1,9 +1,14 @@
-use std::{fs::{self, rename, File, OpenOptions}, io::{BufWriter, Read, Seek, Write}, os::unix::fs::FileExt, path::PathBuf};
+use std::{
+    fs::{self, File, OpenOptions}, 
+    io::{BufWriter, Read, Write}, 
+    os::unix::fs::FileExt, 
+    path::PathBuf, 
+    sync::Arc
+};
 use crate::error::Result;
 
 pub const WAL_FILE_NAME: &str = "wal.log";
 pub const WAL_FILE_DIR: &str = "wal";
-pub const WAL_FILE_BAK_NAME: &str = "wal.bak";
 
 fn get_wal_file_name(id: Option<usize>) -> PathBuf {
     if let Some(id) = id {
@@ -13,9 +18,9 @@ fn get_wal_file_name(id: Option<usize>) -> PathBuf {
     }
 }
 
-
+#[derive(Clone)]
 pub struct WAL {
-    writter: Option<BufWriter<File>>,
+    wal_file: Arc<File>,
     dir_path: PathBuf,
     file_sz: usize,
 
@@ -30,10 +35,7 @@ impl WAL {
             fs::create_dir(dir_path).unwrap();
         }
     }
-    /// dir_path: work_dir
-    fn delete_dir(dir_path: &PathBuf) {
-        fs::remove_dir_all(dir_path.join(WAL_FILE_DIR)).unwrap();
-    }
+
     /// dir_path: work dir path
     /// ok for both reopen and new_open
     /// read next_imm_wal_idx
@@ -49,44 +51,26 @@ impl WAL {
         let dir = fs::read_dir(&dir_path).unwrap();
         let next_imm_wal_idx = dir.count() - 1;
         Ok(Self {
-            writter: Some(BufWriter::new(file)),
+            wal_file: Arc::new(file),
             dir_path,
             file_sz,
             next_imm_wal_idx,
         })
     }
 
-    /// new wal with truncating
-    pub fn clear_and_open(dir_path: PathBuf) -> Result<Self> {
-        Self::delete_dir(&dir_path);
-        Self::check_and_create_dir(&dir_path);
-        let dir_path = dir_path.join(WAL_FILE_DIR);
-        Ok(Self {
-            writter: Some(BufWriter::new(OpenOptions::new()
-                .append(true)
-                .create(true)
-                .truncate(true)
-                .open(dir_path.join(WAL_FILE_NAME))?)),
-            dir_path,
-            file_sz: 0,
-            next_imm_wal_idx: 0,
-        })
-    }
     pub fn get_imm_num(&self) -> usize {
         self.next_imm_wal_idx
     }
 
     /// every write is a 4byte log-len + k byte json log
     pub fn write(&mut self, buffer: &[u8]) -> Result<()> {
-        self.writter.as_mut().unwrap().write_all(buffer)?;
-        self.writter.as_mut().unwrap().flush()?;
+        let mut writter = BufWriter::new(self.wal_file.clone());
+        writter.write_all(buffer)?;
+        writter.flush()?;
         self.file_sz += buffer.len();
         Ok(())
     }
-    pub fn sync(&mut self) -> Result<()> {
-        self.writter.as_mut().unwrap().flush()?;
-        Ok(())
-    }
+
     pub fn read_one_file(&self, id: Option<usize>) -> Result<Vec<u8>> {
         let wal_name = get_wal_file_name(id);
         let mut wal_content: Vec<u8> = Vec::new();
@@ -117,7 +101,7 @@ impl WAL {
     pub fn get_wal_sz(&self) -> usize {
         self.file_sz
     }
-    pub fn freeze_file(&self) -> BufWriter<File> {
+    pub fn get_freeze_file(&self) -> BufWriter<File> {
         let file_name = get_wal_file_name(Some(self.next_imm_wal_idx));
         let ret = OpenOptions::new()
             .append(true)
@@ -129,9 +113,7 @@ impl WAL {
     pub fn incr_next_wal(&mut self) {
         self.file_sz = 0;
         self.next_imm_wal_idx += 1;
-        let mut file = self.writter.take().unwrap().into_inner().unwrap();
-        file.set_len(0).unwrap();
-        file.flush().unwrap();
-        self.writter = Some(BufWriter::new(file));
+        self.wal_file.set_len(0).unwrap();
+        self.wal_file.flush().unwrap();
     }
 }

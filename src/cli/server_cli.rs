@@ -1,6 +1,9 @@
-use std::{default, io::{BufRead, BufReader, Write}, net::{SocketAddr, TcpListener, TcpStream}, sync::{Arc, Mutex}, thread::sleep, time::Duration};
+use std::{
+        io::{BufRead, BufReader, Write}, 
+        net::{SocketAddr, TcpListener, TcpStream}
+    };
 
-use crate::{thread_pool::{NaiveThreadPool, SharedQueueThreadPool, ThreadPool}, KvStore, KvsEngine};
+use crate::{thread_pool::ThreadPool, KvsEngine};
 
 pub struct KvsServer<E: KvsEngine, P: ThreadPool>
 {
@@ -9,6 +12,7 @@ pub struct KvsServer<E: KvsEngine, P: ThreadPool>
     thread_pool: P,
 }
 
+// statically dispatch
 impl<E: KvsEngine, P: ThreadPool> KvsServer<E, P> {
     pub fn new(addr: SocketAddr, engine: E, pool: P) -> Self {
         Self {

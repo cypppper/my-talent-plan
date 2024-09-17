@@ -1,37 +1,32 @@
 use std::{fs::OpenOptions, io::{BufRead, BufReader, BufWriter, Read, Write}, net::{SocketAddr, TcpListener, TcpStream}, thread::sleep, time::Duration};
+use crate::error::Result;
 
-pub struct KvsClient {}
+
+pub struct KvsClient {
+    reader: BufReader<TcpStream>,
+    writer: BufWriter<TcpStream>,
+}
 
 impl KvsClient {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    fn write(stream: &mut TcpStream, bytes: &String) {
-        stream.write_all(bytes.as_bytes()).unwrap();
-    }
-
-    fn connect(addr: SocketAddr) -> Option<TcpStream> {
-        let result = TcpStream::connect(addr);
-        if result.is_ok() {
-            return Some(result.unwrap());
-        }
-        None
+    pub fn connect(addr: SocketAddr) -> Result<Self> {
+        let tcp_reader = TcpStream::connect(addr)?;
+        let tcp_writer = tcp_reader.try_clone()?;
+        Ok(Self {
+            reader: BufReader::new(tcp_reader),
+            writer: BufWriter::new(tcp_writer),    
+        })
     }
     
-    pub fn set(&self, key: &String, value: &String, ipaddr: SocketAddr) {
-        let mut stream = Self::connect(ipaddr).unwrap();
-
+    pub fn set(&mut self, key: &String, value: &String, ipaddr: SocketAddr) {
         let cmd = format!("*3\r\n$3\r\nSET\r\n${}\r\n{}\r\n${}\r\n{}\r\n", 
             key.len(), key, 
             value.len(), value
         );
-        Self::write(&mut stream, &cmd);
+        self.writer.write_all(cmd.as_bytes()).unwrap();
+        self.writer.flush().unwrap();
         
-        
-        let mut reader = BufReader::new(&stream);
         let mut buf = String::new();
-        reader.read_line(&mut buf).unwrap();
+        self.reader.read_line(&mut buf).unwrap();
         if buf.as_bytes() == b"+OK\r\n" {
             // println!("SET OK");
         } else {
@@ -41,26 +36,16 @@ impl KvsClient {
         }
     }
 
-    pub fn shutdown(&self, ipaddr: SocketAddr) {
-        let cmd = format!("*1\r\n$8\r\nSHUTDOWN\r\n");
-        let mut stream = Self::connect(ipaddr);
-        if stream.is_some() {
-            Self::write(stream.as_mut().unwrap(), &cmd);
-        } else {
-            println!("\nstream has end!");
-        }
-    }
-
-    pub fn get(&self, key: &String, ipaddr: SocketAddr) {
-        let mut stream = Self::connect(ipaddr).unwrap();
+    pub fn get(&mut self, key: &String, ipaddr: SocketAddr) {
+        // let mut stream = Self::connect(ipaddr).unwrap();
         let cmd = format!("*2\r\n$3\r\nGET\r\n${}\r\n{}\r\n", 
             key.len(), key, 
         );
-        Self::write(&mut stream, &cmd);
+        self.writer.write_all(cmd.as_bytes()).unwrap();
+        self.writer.flush().unwrap();
 
-        let mut reader = BufReader::new(&stream);
         let mut buf = String::new();
-        reader.read_line(&mut buf).unwrap();
+        self.reader.read_line(&mut buf).unwrap();
         if buf.as_str().starts_with("$") {
             // get success
             // 1. find a value
@@ -71,7 +56,7 @@ impl KvsClient {
                 println!("[GET] Key not found: {}", key);
             } else {
                 buf.clear();
-                reader.read_line(&mut buf).unwrap();
+                self.reader.read_line(&mut buf).unwrap();
                 let value = &buf.as_str()[..buf.len() - 2];
                 println!("{}", value);
             }
@@ -83,16 +68,15 @@ impl KvsClient {
         }
     }
 
-    pub fn remove(&self, key: &String, ipaddr: SocketAddr) {
-        let mut stream = Self::connect(ipaddr).unwrap();
+    pub fn remove(&mut self, key: &String, ipaddr: SocketAddr) {
         let cmd = format!("*2\r\n$2\r\nRM\r\n${}\r\n{}\r\n", 
             key.len(), key, 
         );
-        Self::write(&mut stream, &cmd);
+        self.writer.write_all(cmd.as_bytes()).unwrap();
+        self.writer.flush().unwrap();
 
-        let mut reader = BufReader::new(&stream);
         let mut buf = String::new();
-        reader.read_line(&mut buf).unwrap();
+        self.reader.read_line(&mut buf).unwrap();
         if buf.as_bytes() == b"+OK\r\n" {
             // println!("RM OK");
         } else {
